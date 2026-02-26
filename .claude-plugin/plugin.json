@@ -1,6 +1,6 @@
 {
   "name": "scaled-agent-orchestration",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Tiered agent orchestration for running 10-30+ parallel agents without context overflow. Workers write to disk, coordinators synthesize, parent stays lean.",
   "author": {
     "name": "atwellguy"

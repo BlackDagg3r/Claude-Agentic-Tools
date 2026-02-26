@@ -1,11 +1,9 @@
 ---
 name: scaled-agent-orchestration
-description: Use when spawning 10+ agents, when previous agent runs caused context overflow or compaction errors, or when parallel work requires more agents than can safely return results to one context window
+description: Use when spawning 10+ agents, when previous agent runs caused context overflow or compaction errors, when hierarchical or tiered agent orchestration is needed, or when parallel fan-out requires more agents than can safely return results to one context window
 ---
 
 # Scaled Agent Orchestration
-
-## Overview
 
 Run 30+ agents without blowing context. Workers write to disk, coordinators synthesize, parent receives only brief summaries.
 
@@ -13,21 +11,11 @@ Run 30+ agents without blowing context. Workers write to disk, coordinators synt
 
 ## When to Use
 
-```dot
-digraph when {
-    "How many agents needed?" [shape=diamond];
-    "< 5 agents" [shape=box];
-    "5-10 agents" [shape=box];
-    "10+ agents" [shape=box];
-    "Use dispatching-parallel-agents" [shape=box];
-    "Use this skill" [shape=box];
-    "Just dispatch them" [shape=box];
-
-    "How many agents needed?" -> "Just dispatch them" [label="< 5"];
-    "How many agents needed?" -> "Use dispatching-parallel-agents" [label="5-10"];
-    "How many agents needed?" -> "Use this skill" [label="10+"];
-}
-```
+| Agents needed | Approach |
+|---------------|----------|
+| < 5 | Just dispatch them directly |
+| 5-10 | Use dispatching-parallel-agents if available, otherwise dispatch directly |
+| 10+ | **Use this skill** |
 
 **Use when:**
 - Need 10+ parallel agents
@@ -35,9 +23,9 @@ digraph when {
 - Work decomposes into independent domains with sub-tasks
 
 **Don't use when:**
-- < 10 agents needed (use dispatching-parallel-agents)
-- Tasks are tightly coupled (use subagent-driven-development)
-- Sequential dependency chain (agents need each other's output)
+- < 10 agents needed
+- Tasks are tightly coupled (agents need each other's output)
+- Sequential dependency chain
 
 ## The Architecture
 
@@ -59,7 +47,7 @@ Parent context (receives ~5 short summaries)
 ### 1. Setup output directory
 
 ```bash
-RUN_ID=$(date +%Y%m%d-%H%M%S)
+RUN_ID=$(date +%Y%m%d-%H%M%S)-$RANDOM
 mkdir -p /tmp/orchestration/$RUN_ID/{workers,synthesis}
 ```
 
@@ -69,19 +57,59 @@ Group work into 3-5 coordinator domains. Each domain gets 3-8 workers.
 
 ### 3. Dispatch workers (background, wave by wave)
 
-All workers in a coordinator's domain can run in parallel. Use `run_in_background: true`. Each worker prompt MUST include:
+Use the **Task tool** with `run_in_background: true` to dispatch each worker. Each worker writes findings to its output file and returns only a one-sentence summary.
 
+**Dispatch example:**
+```
+Task tool call:
+  prompt: "[filled worker-prompt.md template]"
+  subagent_type: "general-purpose"  (or a specific agent type)
+  model: "haiku"                    (or "sonnet"/"opus" per model selection below)
+  run_in_background: true
+```
+
+Each worker prompt MUST include:
 - Specific narrow task
-- Output file path
+- Output file path (e.g., `/tmp/orchestration/{RUN_ID}/workers/a1.md`)
+- Instruction to write `<!-- DONE -->` as the last line of output
 - Instruction to return ONLY "Done. {one sentence}" to parent
 
-See `./worker-prompt.md` for template.
+**Wave limit: 8 workers maximum across ALL domains simultaneously** — not 8 per domain. For different model tiers, adjust:
+- haiku workers: up to 12 per wave
+- sonnet workers: up to 8 per wave
+- opus workers: up to 4 per wave
 
-### 4. Dispatch coordinators (after workers finish)
+See `./worker-prompt.md` for the full template.
 
-Each coordinator reads its workers' output files and writes a synthesis. Returns only a brief summary to parent.
+### 3b. Verify worker completion
 
-See `./coordinator-prompt.md` for template.
+**Before dispatching coordinators, verify ALL workers have finished:**
+
+1. Wait for all background Task agents to return their "Done." or "Failed." messages
+2. Check that each expected output file exists and contains `<!-- DONE -->` as its last line:
+   ```bash
+   for f in /tmp/orchestration/$RUN_ID/workers/{expected_files}; do
+     tail -1 "$f" | grep -q "DONE" || echo "INCOMPLETE: $f"
+   done
+   ```
+3. If any worker failed: retry once with the same prompt, or note it as a gap for the coordinator
+4. Only proceed to coordinators when all workers are done or accounted for
+
+### 4. Dispatch coordinators (after ALL workers verified)
+
+Each coordinator reads its workers' output files (provided as an **explicit list of file paths**, not glob patterns) and writes a synthesis. Returns only a brief summary to parent.
+
+**Dispatch example:**
+```
+Task tool call:
+  prompt: "[filled coordinator-prompt.md template with explicit file list]"
+  subagent_type: "general-purpose"
+  model: "sonnet"
+```
+
+Coordinators run in **foreground** (not background) so the parent receives their summaries directly.
+
+See `./coordinator-prompt.md` for the full template.
 
 ### 5. Parent decides next action
 
@@ -89,11 +117,11 @@ Parent has 3-5 coordinator summaries (small context cost). Full details on disk 
 
 ## Wave Strategy
 
-For 30+ agents, batch workers in waves of 8:
+For 30+ agents, batch workers in waves (8 max across all domains simultaneously):
 
 ```
-Wave 1: Workers A1-A4, B1-B4 (background) → finish
-Wave 2: Workers A5-A8, C1-C4 (background) → finish
+Wave 1: Workers A1-A4, B1-B4 (background) → verify completion
+Wave 2: Workers A5-A8, C1-C4 (background) → verify completion
 Wave 3: Coordinators A, B, C (foreground) → summaries to parent
 Wave 4: Action agents based on findings
 ```
@@ -105,30 +133,17 @@ Wave 4: Action agents based on findings
 | 1 worker (background, file output) | ~20 tokens ("Done. Found 3 issues.") |
 | 1 coordinator summary | ~200 tokens |
 | 30 workers + 4 coordinators | ~1,400 tokens total |
-| 30 agents flat (anti-pattern) | ~150,000 tokens (context death) |
+| 30 agents flat (anti-pattern) | ~150,000 tokens (context overflow) |
 
 ## Model Selection
 
-Choose the model for each agent based on task type. Do NOT default everything to the same model.
+Choose the model for each agent based on task type. Do NOT default everything to the same model. Pass `model: "haiku"`, `model: "sonnet"`, or `model: "opus"` in the Task tool call.
 
-```dot
-digraph model {
-    "What is the task?" [shape=diamond];
-    "Lookup, search, grep, exists-check, formatting" [shape=box];
-    "Code review, test writing, pattern analysis, synthesis" [shape=box];
-    "Architecture, complex debug, security audit, novel design" [shape=box];
-    "haiku" [shape=box style=filled fillcolor=lightgreen];
-    "sonnet" [shape=box style=filled fillcolor=lightyellow];
-    "opus" [shape=box style=filled fillcolor=lightsalmon];
-
-    "What is the task?" -> "Lookup, search, grep, exists-check, formatting" [label="simple"];
-    "What is the task?" -> "Code review, test writing, pattern analysis, synthesis" [label="moderate"];
-    "What is the task?" -> "Architecture, complex debug, security audit, novel design" [label="complex"];
-    "Lookup, search, grep, exists-check, formatting" -> "haiku";
-    "Code review, test writing, pattern analysis, synthesis" -> "sonnet";
-    "Architecture, complex debug, security audit, novel design" -> "opus";
-}
-```
+| Task type | Model |
+|-----------|-------|
+| Simple: search, grep, lookup, exists-check, formatting | haiku |
+| Moderate: code review, test writing, pattern analysis, synthesis | sonnet |
+| Complex: architecture, security audit, novel design, writing code | opus |
 
 ### By agent role
 
@@ -140,13 +155,7 @@ digraph model {
 | **Coordinators** (synthesize files) | sonnet | Reading + ranking, moderate reasoning |
 | **Action agents** (implement fixes) | opus | Writing code, needs full capability |
 
-### By accuracy requirement
-
-| Accuracy need | Model | Example tasks |
-|---------------|-------|---------------|
-| **Low** — exploratory, can tolerate errors | haiku | "List all files matching X", "Count occurrences" |
-| **Medium** — should be right, errors recoverable | sonnet | "Review this code for issues", "Summarize findings" |
-| **High** — must be right, errors are costly | opus | "Design the auth system", "Fix the race condition" |
+**Note:** If a "simple" task requires a multi-step tool chain (glob → grep → read → filter), use **sonnet** not haiku. Haiku's tool-use reliability drops with complex chains.
 
 ### Quick rule
 
@@ -161,6 +170,8 @@ digraph model {
 - Skipping coordinator layer (flat fan-out at scale)
 - All agents in foreground (use background for workers)
 - No output directory setup before dispatching
+- Dispatching coordinators before verifying all workers finished
+- Using glob patterns instead of explicit file paths in coordinator prompts
 
 ## Common Mistakes
 
@@ -168,11 +179,10 @@ digraph model {
 
 **Too many coordinators:** 3-5 is the sweet spot. More defeats the purpose.
 
-**No wave batching:** 30 simultaneous background agents can still strain the system. Batch 8 at a time.
+**No wave batching:** 30 simultaneous background agents can still strain the system. Batch 8 at a time across all domains.
 
-**Coordinators read wrong files:** Use explicit paths. Don't rely on glob patterns in prompts.
+**Coordinators read wrong files:** Use explicit file paths in coordinator prompts. Don't rely on glob patterns.
 
-## Integration
+**No completion verification:** Always verify worker output files exist and contain `<!-- DONE -->` before dispatching coordinators.
 
-- **superpowers:dispatching-parallel-agents** — Use for the worker-level dispatch within each coordinator domain
-- **superpowers:subagent-driven-development** — Use when tasks are sequential, not parallel
+**Silent worker failures:** Workers that crash produce no output. Check for missing files before coordinator dispatch. Retry once, then flag as gap.
