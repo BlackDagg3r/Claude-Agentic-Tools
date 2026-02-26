@@ -107,6 +107,53 @@ Wave 4: Action agents based on findings
 | 30 workers + 4 coordinators | ~1,400 tokens total |
 | 30 agents flat (anti-pattern) | ~150,000 tokens (context death) |
 
+## Model Selection
+
+Choose the model for each agent based on task type. Do NOT default everything to the same model.
+
+```dot
+digraph model {
+    "What is the task?" [shape=diamond];
+    "Lookup, search, grep, exists-check, formatting" [shape=box];
+    "Code review, test writing, pattern analysis, synthesis" [shape=box];
+    "Architecture, complex debug, security audit, novel design" [shape=box];
+    "haiku" [shape=box style=filled fillcolor=lightgreen];
+    "sonnet" [shape=box style=filled fillcolor=lightyellow];
+    "opus" [shape=box style=filled fillcolor=lightsalmon];
+
+    "What is the task?" -> "Lookup, search, grep, exists-check, formatting" [label="simple"];
+    "What is the task?" -> "Code review, test writing, pattern analysis, synthesis" [label="moderate"];
+    "What is the task?" -> "Architecture, complex debug, security audit, novel design" [label="complex"];
+    "Lookup, search, grep, exists-check, formatting" -> "haiku";
+    "Code review, test writing, pattern analysis, synthesis" -> "sonnet";
+    "Architecture, complex debug, security audit, novel design" -> "opus";
+}
+```
+
+### By agent role
+
+| Role | Model | Why |
+|------|-------|-----|
+| **Workers** (search, scan, grep) | haiku | Narrow scope, fast, cheap |
+| **Workers** (code analysis, review) | sonnet | Needs reasoning but scope is bounded |
+| **Workers** (security audit, architecture) | opus | Accuracy critical, complex judgment |
+| **Coordinators** (synthesize files) | sonnet | Reading + ranking, moderate reasoning |
+| **Action agents** (implement fixes) | opus | Writing code, needs full capability |
+
+### By accuracy requirement
+
+| Accuracy need | Model | Example tasks |
+|---------------|-------|---------------|
+| **Low** — exploratory, can tolerate errors | haiku | "List all files matching X", "Count occurrences" |
+| **Medium** — should be right, errors recoverable | sonnet | "Review this code for issues", "Summarize findings" |
+| **High** — must be right, errors are costly | opus | "Design the auth system", "Fix the race condition" |
+
+### Quick rule
+
+- **Reading** → haiku
+- **Analyzing** → sonnet
+- **Deciding or writing code** → opus
+
 ## Red Flags - STOP
 
 - Spawning 10+ agents without file-based output
