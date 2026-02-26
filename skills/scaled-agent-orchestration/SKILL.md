@@ -47,8 +47,8 @@ Parent context (receives ~5 short summaries)
 ### 1. Setup output directory
 
 ```bash
-RUN_ID=$(date +%Y%m%d-%H%M%S)-$RANDOM
-mkdir -p /tmp/orchestration/$RUN_ID/{workers,synthesis}
+RUN_ID="$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)"
+mkdir -p "/tmp/orchestration/$RUN_ID"/{workers,synthesis} || { echo "ERROR: failed to create run directory"; exit 1; }
 ```
 
 ### 2. Decompose into domains
@@ -88,12 +88,15 @@ See `./worker-prompt.md` for the full template.
 1. Wait for all background Task agents to return their "Done." or "Failed." messages
 2. Check that each expected output file exists and contains `<!-- DONE -->` as its last line:
    ```bash
-   for f in /tmp/orchestration/$RUN_ID/workers/{expected_files}; do
+   # Replace the file list below with your actual worker IDs (e.g., a1.md a2.md b1.md b2.md)
+   for f in /tmp/orchestration/$RUN_ID/workers/a1.md /tmp/orchestration/$RUN_ID/workers/a2.md; do
+     [ -f "$f" ] || { echo "MISSING: $f"; continue; }
      tail -1 "$f" | grep -q "DONE" || echo "INCOMPLETE: $f"
    done
    ```
-3. If any worker failed: retry once with the same prompt, or note it as a gap for the coordinator
-4. Only proceed to coordinators when all workers are done or accounted for
+3. **Timeout:** If a worker has not returned after 5 minutes, treat it as failed (missing DONE sentinel). Do not wait indefinitely.
+4. If any worker failed or timed out: retry once with the same prompt, or note it as a gap for the coordinator
+5. Only proceed to coordinators when all workers are done or accounted for
 
 ### 4. Dispatch coordinators (after ALL workers verified)
 
@@ -110,6 +113,22 @@ Task tool call:
 Coordinators run in **foreground** (not background) so the parent receives their summaries directly.
 
 See `./coordinator-prompt.md` for the full template.
+
+### Template Variables
+
+Both prompt templates use `{placeholder}` syntax. Replace before dispatching:
+
+| Placeholder | Used in | Example value |
+|-------------|---------|---------------|
+| `{specific_task_description}` | worker | "Scan SKILL.md for broken cross-references" |
+| `{output_file_path}` | worker | `/tmp/orchestration/$RUN_ID/workers/a1.md` |
+| `{allowed_tools}` | worker | `Read, Grep, Glob` |
+| `{task_name}` | worker | "Cross-Reference Check" |
+| `{scope_constraint}` | worker | "Only files in skills/scaled-agent-orchestration/" |
+| `{explicit_file_list}` | coordinator | A markdown list: `- /tmp/.../workers/a1.md\n- /tmp/.../workers/a2.md` |
+| `{synthesis_file_path}` | coordinator | `/tmp/orchestration/$RUN_ID/synthesis/security.md` |
+| `{domain_name}` | coordinator | "Security" |
+| `{worker_N_name}` | coordinator | "Worker A1" (matches worker IDs in your plan) |
 
 ### 5. Parent decides next action
 
@@ -131,8 +150,8 @@ Wave 4: Action agents based on findings
 | Component | Context cost to parent |
 |-----------|----------------------|
 | 1 worker (background, file output) | ~20 tokens ("Done. Found 3 issues.") |
-| 1 coordinator summary | ~200 tokens |
-| 30 workers + 4 coordinators | ~1,400 tokens total |
+| 1 coordinator summary | ~400 tokens (under 300 words) |
+| 30 workers + 4 coordinators | ~2,200 tokens total |
 | 30 agents flat (anti-pattern) | ~150,000 tokens (context overflow) |
 
 ## Model Selection
@@ -172,6 +191,7 @@ Choose the model for each agent based on task type. Do NOT default everything to
 - No output directory setup before dispatching
 - Dispatching coordinators before verifying all workers finished
 - Using glob patterns instead of explicit file paths in coordinator prompts
+- File paths that escape `/tmp/orchestration/{RUN_ID}/` — always verify paths stay within the run directory
 
 ## Common Mistakes
 

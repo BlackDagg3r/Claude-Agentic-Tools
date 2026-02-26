@@ -10,12 +10,12 @@ Spawning 30 agents flat dumps ~150,000 tokens back into the parent context, caus
 
 Tiered file-based communication:
 - **Workers** write findings to disk, return only "Done. {one sentence}" (~20 tokens each)
-- **Coordinators** read worker files, return top 3 findings (~200 tokens each)
+- **Coordinators** read worker files, return top 3 findings under 300 words (~400 tokens each)
 - **Parent** receives 3-5 brief summaries instead of 30 full reports
 
 | Setup | Context cost |
 |-------|-------------|
-| 30 workers + 4 coordinators (this plugin) | ~1,400 tokens |
+| 30 workers + 4 coordinators (this plugin) | ~2,200 tokens |
 | 30 agents flat (anti-pattern) | ~150,000 tokens |
 
 ## Installation
@@ -27,7 +27,7 @@ claude plugin marketplace add https://github.com/BlackDagg3r/Claude-Agentic-Tool
 claude plugin install scaled-agent-orchestration@blackdagger-tools
 ```
 
-**Note:** This marketplace must be added via git clone, not via direct URL to marketplace.json.
+This clones the marketplace repo to `~/.claude/plugins/marketplaces/`. The `marketplace add` command handles the git clone automatically.
 
 **Via local directory (session only):**
 
@@ -54,6 +54,20 @@ The plugin chooses the right model per agent:
 | Code review, synthesis | sonnet (balanced) |
 | Architecture, security audit, writing code | opus (full capability) |
 
+**Coordinators always use sonnet.** Workers use haiku/sonnet/opus based on task complexity.
+
+## Wave Limits
+
+Workers batch in waves with per-model limits:
+
+| Model | Max per wave |
+|-------|-------------|
+| haiku | 12 |
+| sonnet | 8 |
+| opus | 4 |
+
+The limit applies across ALL domains simultaneously — not per domain. Each wave completes and is verified (DONE sentinel check) before the next starts.
+
 ## Architecture
 
 ```
@@ -68,7 +82,9 @@ Parent (receives ~5 summaries)
     └── ...
 ```
 
-Workers batch in waves of 8. Each wave completes and is verified before the next starts.
+Output directories: `/tmp/orchestration/{RUN_ID}/workers/` and `/tmp/orchestration/{RUN_ID}/synthesis/`
+
+Prompt templates: see `skills/scaled-agent-orchestration/worker-prompt.md` and `coordinator-prompt.md` for the full worker and coordinator prompt templates with all placeholder variables.
 
 ## License
 
