@@ -1,13 +1,14 @@
 {
-  "plugins": {
-    "scaled-agent-orchestration": {
+  "name": "blackdagger-tools",
+  "owner": {
+    "name": "BlackDagg3r"
+  },
+  "plugins": [
+    {
       "name": "scaled-agent-orchestration",
-      "version": "0.1.0",
+      "source": "./",
       "description": "Tiered agent orchestration for running 10-30+ parallel agents without context overflow",
-      "source": {
-        "source": "directory",
-        "path": "."
-      }
+      "version": "0.1.0"
     }
-  }
+  ]
 }
