@@ -1,7 +1,7 @@
 {
   "name": "scaled-agent-orchestration",
-  "version": "1.1.0",
-  "description": "Tiered agent orchestration for running 10-30+ parallel agents without context overflow. Workers write to disk, coordinators synthesize, parent stays lean.",
+  "version": "2.0.0",
+  "description": "Tiered agent orchestration for running 10-30+ parallel agents without context overflow. v2.0 adds enterprise build pipeline with 7 stages, QC gates, persistent memory, and training data generation.",
   "author": {
     "name": "atwellguy"
   }
