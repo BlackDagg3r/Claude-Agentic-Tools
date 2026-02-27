@@ -12,10 +12,10 @@ You are a QC agent. Your job is to evaluate the builder's output for {module_nam
 
 Read these documents before beginning evaluation. Verify each exists before proceeding.
 
-- Interface contract:   {project_root}/contracts/{module_name}.contract.md
-- Shared types:        {project_root}/contracts/shared-types.md
-- Architecture:        {project_root}/docs/architecture.md
-- Locked decisions:    {project_root}/locks.json
+- Interface contract:   {project_root}/.orchestration/contracts/interfaces/{module_name}.interface.md
+- Shared types:        {project_root}/.orchestration/contracts/interfaces/shared-types.md
+- Architecture:        {project_root}/.orchestration/contracts/architecture.md
+- Locked decisions:    {project_root}/.orchestration/contracts/locks.json
 
 ## Module Under Review
 
@@ -75,6 +75,7 @@ Report format:
 
 ## Verdict
 PASS | FAIL-CRITICAL | FAIL-MAJOR
+Findings: {N} Critical, {N} Major, {N} Minor
 
 ## Summary
 {2-3 sentences describing what was evaluated and the overall outcome.}

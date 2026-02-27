@@ -98,18 +98,20 @@ Do NOT skip this step. It is how future agents and humans understand what you bu
 
 After writing the brain file, generate 5–10 question/answer pairs that capture the most useful knowledge from your implementation session. These pairs should be concrete and specific — not generic platitudes.
 
-Append each pair to `.orchestration/training/session-pairs.jsonl` as a separate JSONL line. Create the file if it does not exist.
+Append each pair to `{training_output_path}` as a separate JSONL line. Create the file if it does not exist.
 
 Each line must follow this format exactly:
 
 ```jsonl
-{"messages": [{"role": "user", "content": "<question>"}, {"role": "assistant", "content": "<answer>"}], "metadata": {"module": "{module_name}", "project": "{project_name}", "stage": "builder"}}
+{"messages": [{"role": "system", "content": "You are the master agent for the {project_name} project."}, {"role": "user", "content": "<question>"}, {"role": "assistant", "content": "<answer>"}], "metadata": {"pair_id": "{project_name}-builder-{module_name}-NNN", "taxonomy": "<type>", "source_refs": ["<file_path>"], "modules_referenced": ["{module_name}"], "hop_count": 1, "difficulty": "<easy|medium|hard>", "quality_score": 0.8}}
 ```
+
+Valid taxonomy types: `factual_recall`, `architectural_reasoning`, `cross_module`, `conformance_validation`, `state_status`, `counterfactual`, `procedural`.
 
 Example line:
 
 ```jsonl
-{"messages": [{"role": "user", "content": "What error does the {module_name} module raise when the input list is empty?"}, {"role": "assistant", "content": "It raises a ValueError with the message 'Input must contain at least one element.' This is specified in the interface contract invariant INV-03."}], "metadata": {"module": "{module_name}", "project": "{project_name}", "stage": "builder"}}
+{"messages": [{"role": "system", "content": "You are the master agent for the {project_name} project."}, {"role": "user", "content": "What error does the {module_name} module raise when the input list is empty?"}, {"role": "assistant", "content": "It raises a ValueError with the message 'Input must contain at least one element.' This is specified in the interface contract invariant INV-03."}], "metadata": {"pair_id": "{project_name}-builder-{module_name}-001", "taxonomy": "factual_recall", "source_refs": [".orchestration/contracts/interfaces/{module_name}.interface.md"], "modules_referenced": ["{module_name}"], "hop_count": 1, "difficulty": "easy", "quality_score": 0.85}}
 ```
 
 Good pair topics: edge cases you found, locked decisions that shaped your implementation, non-obvious type constraints, test strategies you used, dependencies you chose and why.
