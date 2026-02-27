@@ -206,3 +206,169 @@ Choose the model for each agent based on task type. Do NOT default everything to
 **No completion verification:** Always verify worker output files exist and contain `<!-- DONE -->` before dispatching coordinators.
 
 **Silent worker failures:** Workers that crash produce no output. Check for missing files before coordinator dispatch. Retry once, then flag as gap.
+
+## Build Pipeline (v2.0)
+
+For building enterprise applications, not just auditing. Uses the same file-based communication pattern but adds isolation (git worktrees), contracts, QC gates, persistent memory, and training data generation.
+
+### When to Use Build Mode
+
+| Request type | Mode |
+|-------------|------|
+| "Audit/review/scan this codebase" | v1.1 audit (above) |
+| "Build a new application" | v2.0 build pipeline |
+| "Add a major feature to existing app" | v2.0 build pipeline |
+
+### Build Pipeline Stages
+
+```
+Stage 1:  ARCHITECT   (opus, foreground, human approves)
+Stage 1b: BOOTSTRAP   (sonnet, generate training data from blueprint)
+Stage 2:  SCAFFOLD    (opus, foreground, master QC)
+Stage 3:  BUILD       (sonnet/opus, parallel in worktrees, per-module QC)
+Stage 4:  ASSEMBLE    (sonnet, sequential merge, integration tests)
+Stage 5:  HARDEN      (opus, v1.1 fan-out audit pattern)
+Stage 6:  SHIP        (sonnet, human approves)
+Stage 7:  CURATE      (sonnet, memory maintenance)
+```
+
+### Directory Setup (Build Mode)
+
+```bash
+RUN_ID="$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)"
+mkdir -p "/tmp/orchestration/$RUN_ID"/{workers,synthesis,builds,qc,conflicts} || { echo "ERROR: failed to create run directory"; exit 1; }
+mkdir -p "{project_root}/.orchestration"/{contracts/interfaces,contracts/decisions,brains,training} || { echo "ERROR: failed to create orchestration directory"; exit 1; }
+```
+
+### Stage 1: Dispatch Architect
+
+```
+Task tool call:
+  prompt: "[filled architect-prompt.md]"
+  subagent_type: "general-purpose"
+  model: "opus"
+  run_in_background: false
+```
+
+**Gate:** Present architecture to human. Wait for approval before proceeding.
+
+### Stage 1b: Bootstrap Training Data
+
+```
+Task tool call:
+  prompt: "[filled training-generator-prompt.md with all contracts/ files]"
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  run_in_background: false
+```
+
+### Stage 2: Dispatch Scaffold Agent
+
+Use a general-purpose opus agent to create the project skeleton. The scaffold MUST match modules.json exactly.
+
+**Gate:** Master agent (or parent) verifies scaffold matches contracts.
+
+### Stage 3: Dispatch Builders (Parallel)
+
+For each module in modules.json:
+
+```
+Task tool call:
+  prompt: "[filled builder-prompt.md for this module]"
+  subagent_type: "general-purpose"
+  model: "{builder_model from modules.json}"
+  run_in_background: true
+  isolation: "worktree"
+```
+
+Wave limits apply (same as v1.1: opus 4, sonnet 8, haiku 12).
+
+After each builder returns, dispatch a QC agent:
+
+```
+Task tool call:
+  prompt: "[filled qc-prompt.md for this module]"
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  run_in_background: false
+```
+
+**Gate:** QC verdict determines next step:
+- PASS → module queued for assembly
+- FAIL-CRITICAL → halt pipeline
+- FAIL-MAJOR → builder gets fix cycle (re-dispatch with QC findings)
+- MINOR findings → logged, no block
+
+### Stage 4: Dispatch Assembler
+
+```
+Task tool call:
+  prompt: "[filled assembler-prompt.md with ordered module list]"
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  run_in_background: false
+```
+
+### Stage 5: Harden (uses v1.1 audit pattern)
+
+Dispatch v1.1 orchestration against the integrated codebase:
+- Domain A: Security audit workers + coordinator
+- Domain B: Performance analysis workers + coordinator
+- Domain C: Edge case / compliance workers + coordinator
+
+Same rules as v1.1: wave batched, file-based, coordinator synthesis.
+
+### Stage 6: Ship
+
+Present hardening results to human. If approved, merge integration branch to main.
+
+### Stage 7: Curate
+
+After each work session, update brain files, compress memory, regenerate training data.
+
+### Contract Conflict Protocol
+
+If a builder returns "BLOCKED. Contract conflict:":
+1. Read the conflict file at `.orchestration/conflicts/{module}-{issue}.md`
+2. Evaluate: can the contract flex, or must the builder adapt?
+3. Present to human for approval
+4. If contract changes: update contracts/ and notify affected builders via brain files
+5. Resolved conflict becomes a new ADR in contracts/decisions/
+
+### Trust Flag System
+
+Decisions in locks.json carry lock levels:
+- `unlocked` — any agent can discuss
+- `locked` — only locking domain + master + human can change
+- `critical` — only human + master can change
+
+Builders check locks.json before implementation. If a decision is locked or critical, they comply without question. The assertion field tells them what to implement.
+
+### Memory Layer Reference
+
+| Layer | Location | Updated by | Contains |
+|-------|----------|-----------|----------|
+| L1 Brain Files | `.orchestration/brains/{role}.md` | Producing agent | Current state, decisions, next steps |
+| L2 Session Summaries | Pinecone `project-{name}/{role}` | Producing agent | Recent session history |
+| L3 Deep Archive | Pinecone `project-{name}/archive` | Stage 7 curator | Historical rationale |
+| L4 Training Data | `.orchestration/training/*.jsonl` | Every agent | Q/A pairs for fine-tuning |
+
+### Build Pipeline Template Variables
+
+| Placeholder | Used in | Example |
+|-------------|---------|---------|
+| `{project_description}` | architect | "SaaS billing platform with Stripe integration" |
+| `{project_root}` | all build templates | `/Users/atwellguy/my-project` |
+| `{project_name}` | training generator | "billing-platform" |
+| `{module_name}` | builder, qc | "auth" |
+| `{module_description}` | builder | "Authentication and authorization" |
+| `{module_code_path}` | qc | `/tmp/orchestration/{RUN_ID}/builds/module-auth/` |
+| `{qc_report_path}` | builder, qc | `/tmp/orchestration/{RUN_ID}/qc/auth-build-qc.md` |
+| `{integration_branch_name}` | assembler | `orchestration/{RUN_ID}/integration` |
+| `{ordered_module_list_with_branches}` | assembler | Numbered list of modules with branch names |
+| `{test_command}` | qc | `pytest tests/ -v` or `npm test` |
+| `{integration_test_command}` | assembler | `pytest tests/integration/ -v` |
+| `{training_output_path}` | training gen, builder | `.orchestration/training/bootstrap.jsonl` |
+| `{source_file_list}` | training gen | Markdown list of all contracts/ files |
+| `{start_pair_id}` | training gen | `1` (bootstrap) or next available ID |
+| `{allowed_tools}` | builder | `Read, Write, Edit, Bash, Glob, Grep` |
