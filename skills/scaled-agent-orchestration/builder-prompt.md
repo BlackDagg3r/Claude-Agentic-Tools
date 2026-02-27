@@ -38,8 +38,9 @@ Do NOT proceed to implementation until you have read all mandatory files above.
 
 After reading `locks.json`, apply these rules without exception:
 
-- Any decision marked `"locked": true` is FINAL. Do not question it, do not work around it, do not raise it as an issue. Implement exactly as specified.
-- Any decision marked `"critical": true` is a hard constraint. Violating it is a build failure.
+- Any decision with `"lock_level": "locked"` is FINAL. Do not question it, do not work around it, do not raise it as an issue. Implement exactly as the `assertion` field specifies.
+- Any decision with `"lock_level": "critical"` is a hard constraint. Violating it is a build failure.
+- Check the `affects` array — only enforce locks that list your `{module_name}` (or all modules).
 - If a locked or critical decision conflicts with what the interface contract says, do NOT resolve it yourself — follow the Contract Conflict protocol below.
 
 ## Task Steps

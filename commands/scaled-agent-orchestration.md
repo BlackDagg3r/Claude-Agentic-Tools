@@ -8,7 +8,7 @@ argument-hint: "<task description or 'setup'>"
 Run a scaled agent orchestration using tiered file-based communication.
 
 **Mode detection:**
-- If $ARGUMENTS mentions "build", "create", "implement", "develop", "scaffold", "new app", "new project", "greenfield", or "add feature": use the **build pipeline** — run `/build-pipeline $ARGUMENTS` instead.
+- If $ARGUMENTS mentions "build", "create", "implement", "develop", "scaffold", "make", "generate", "new app", "new project", "greenfield", or "add feature": use the **build pipeline** — run `/build-pipeline $ARGUMENTS` instead.
 - If $ARGUMENTS mentions "audit", "review", "scan", "analyze", "check", or is a general task description: use the **v1.1 audit orchestration** below.
 - If unclear: ask the user whether they want to build something or analyze something.
 

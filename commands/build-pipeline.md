@@ -14,6 +14,13 @@ Run the enterprise build pipeline using tiered agent orchestration.
 
 Execute the 7-stage build pipeline. Follow ALL stages in order. Do NOT skip stages.
 
+**Prompt templates** are in `skills/scaled-agent-orchestration/`:
+- `architect-prompt.md` — Stage 1
+- `training-generator-prompt.md` — Stage 1b, 7
+- `builder-prompt.md` — Stage 3
+- `qc-prompt.md` — Stage 3 (after each builder)
+- `assembler-prompt.md` — Stage 4
+
 **Stage 1: ARCHITECT**
 1. Create orchestration directories:
    ```bash

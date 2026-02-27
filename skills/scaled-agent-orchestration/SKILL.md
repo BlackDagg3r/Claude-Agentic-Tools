@@ -357,6 +357,7 @@ Builders check locks.json before implementation. If a decision is locked or crit
 
 | Placeholder | Used in | Example |
 |-------------|---------|---------|
+| `{existing_codebase_summary_or_none}` | architect | "None" or a brief summary of existing code |
 | `{project_description}` | architect | "SaaS billing platform with Stripe integration" |
 | `{project_root}` | all build templates | `/Users/atwellguy/my-project` |
 | `{project_name}` | training generator | "billing-platform" |
@@ -368,6 +369,8 @@ Builders check locks.json before implementation. If a decision is locked or crit
 | `{ordered_module_list_with_branches}` | assembler | Numbered list of modules with branch names |
 | `{test_command}` | qc | `pytest tests/ -v` or `npm test` |
 | `{integration_test_command}` | assembler | `pytest tests/integration/ -v` |
+| `{qc_dir}` | assembler | `/tmp/orchestration/{RUN_ID}/qc` |
+| `{assembly_report_path}` | assembler | `/tmp/orchestration/{RUN_ID}/synthesis/assembly.md` |
 | `{training_output_path}` | training gen, builder | `.orchestration/training/bootstrap.jsonl` |
 | `{source_file_list}` | training gen | Markdown list of all contracts/ files |
 | `{start_pair_id}` | training gen | `1` (bootstrap) or next available ID |
