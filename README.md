@@ -86,6 +86,31 @@ Output directories: `/tmp/orchestration/{RUN_ID}/workers/` and `/tmp/orchestrati
 
 Prompt templates: see `skills/scaled-agent-orchestration/worker-prompt.md` and `coordinator-prompt.md` for the full worker and coordinator prompt templates with all placeholder variables.
 
+## Build Pipeline (v2.0)
+
+For building complete applications, not just auditing:
+
+```
+/build-pipeline Build a SaaS billing platform with auth, API, and React frontend
+```
+
+**7-stage pipeline:**
+
+| Stage | Agent | Gate |
+|-------|-------|------|
+| 1. Architect | opus | Human approval |
+| 1b. Bootstrap | sonnet | Auto (pair count) |
+| 2. Scaffold | opus | Master conformance check |
+| 3. Build | sonnet/opus (parallel worktrees) | Per-module QC |
+| 4. Assemble | sonnet (sequential merge) | Integration tests |
+| 5. Harden | opus (v1.1 audit pattern) | Tiered severity |
+| 6. Ship | sonnet | Human approval |
+| 7. Curate | sonnet | Memory maintenance |
+
+Each builder works in an isolated git worktree. QC gates use tiered severity (critical/major/minor). Persistent memory via brain files + Pinecone. Automated training data generation for fine-tuning a project master model.
+
+See `docs/plans/2026-02-26-enterprise-orchestration-design.md` for the full design.
+
 ## License
 
 MIT
