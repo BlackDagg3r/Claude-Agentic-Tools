@@ -12,6 +12,17 @@ Run the enterprise build pipeline using tiered agent orchestration.
 
 **If $ARGUMENTS contains a project description:**
 
+**Pre-flight check:** Before anything else, verify the output token limit is sufficient:
+```bash
+echo "CLAUDE_CODE_MAX_OUTPUT_TOKENS=${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-not set}"
+```
+If not set or below 128000, warn the user:
+> ⚠️ The build pipeline requires `CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000` or higher.
+> The architect stage alone can exceed the default 32k limit.
+> Run: `export CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000` then restart Claude Code.
+
+**Do NOT proceed until the token limit is confirmed adequate.**
+
 Execute the 7-stage build pipeline. Follow ALL stages in order. Do NOT skip stages.
 
 **Prompt templates** are in `skills/scaled-agent-orchestration/`:

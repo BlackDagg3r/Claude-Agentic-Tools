@@ -211,6 +211,10 @@ Choose the model for each agent based on task type. Do NOT default everything to
 
 For building enterprise applications, not just auditing. Uses the same file-based communication pattern but adds isolation (git worktrees), contracts, QC gates, persistent memory, and training data generation.
 
+### Prerequisites
+
+**Required:** `CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000` or higher. The architect stage produces large output that exceeds the default 32k limit. Set before launching: `export CLAUDE_CODE_MAX_OUTPUT_TOKENS=128000`
+
 ### When to Use Build Mode
 
 | Request type | Mode |
